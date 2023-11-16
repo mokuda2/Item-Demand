@@ -4,39 +4,9 @@ library(tidymodels)
 library(timetk)
 library(ggpubr)
 
-train <- vroom("./Item-Demand/train.csv")
-train
+train <- vroom("./train.csv")
 
-test <- vroom("./Item-Demand/test.csv")
-test
-
-item1 <- train[train$item == 1 & train$store == 1,]
-item2 <- train[train$item == 2 & train$store == 1,]
-item3 <- train[train$item == 3 & train$store == 1,]
-item4 <- train[train$item == 4 & train$store == 1,]
-
-item_list = c(item1, item2, item3, item4)
-
-par(mfrow = c(2, 2))
-
-plot1 <- item1 %>%
-  pull(sales) %>%
-  forecast::ggAcf(.)
-
-plot2 <- item2 %>%
-  pull(sales) %>%
-  forecast::ggAcf(.)
-
-plot3 <- item3 %>%
-  pull(sales) %>%
-  forecast::ggAcf(.)
-
-plot4 <- item4 %>%
-  pull(sales) %>%
-  forecast::ggAcf(.)
-
-plots <- ggarrange(plot1, plot2, plot3, plot4)
-ggsave("./Item-Demand/acf.png", plot = plots)
+test <- vroom("./test.csv")
 
 ## ML for Time Series
 store3_item25 <- train %>%
@@ -64,10 +34,10 @@ rf_workflow <- workflow() %>%
 # Set up grid of tuning values
 tuning_grid <- grid_regular(mtry(range=c(1,(ncol(train) - 1))),
                             min_n(),
-                            levels = 3)
+                            levels = 1)
 
 # Set up K-fold CV
-folds <- vfold_cv(train, v = 3, repeats=1)
+folds <- vfold_cv(train, v = 1, repeats=1)
 
 CV_results <- rf_workflow %>%
   tune_grid(resamples=folds,
