@@ -4,12 +4,12 @@ library(tidymodels)
 library(timetk)
 library(ggpubr)
 library(modeltime)
-library(orca)
+library(forecast)
 
-train <- vroom("./Item-Demand/train.csv")
+train <- vroom("./STAT 348/Item-Demand/train.csv")
 train
 
-test <- vroom("./Item-Demand/test.csv")
+test <- vroom("./STAT 348/Item-Demand/test.csv")
 test
 
 item1 <- train[train$item == 1 & train$store == 1,]
@@ -97,11 +97,11 @@ es_model <- exp_smoothing() %>%
   set_engine("ets") %>%
   fit(sales~date, data=training(cv_split))
 
-## Cross-validate to tune model
+# Cross-validate to tune model
 cv_results <- modeltime_calibrate(es_model,
                                   new_data = testing(cv_split))
 
-## Visualize CV results
+# Visualize CV results
 p1 <- cv_results %>%
   modeltime_forecast(
                      new_data = testing(cv_split),
@@ -109,7 +109,7 @@ p1 <- cv_results %>%
   ) %>%
   plot_modeltime_forecast(.interactive=TRUE)
 
-## Evaluate the accuracy
+# Evaluate the accuracy
 cv_results %>%
   modeltime_accuracy() %>%
   table_modeltime_accuracy(
@@ -179,3 +179,123 @@ p4 <- es_fullfit2 %>%
 
 image <- plotly::subplot(p1, p3, p2, p4, nrows=2)
 # orca(image, "./Item-Demand/image.png")
+
+## ARIMA
+store3_item25 <- train %>%
+  filter(store==3, item==25)
+
+recipe <- recipe(sales~date, data=store3_item25) %>%
+  step_date(date, features="doy") %>%
+  step_date(date, features="dow") %>%
+  step_date(date, features="month")
+
+prep <- prep(recipe)
+baked_train <- bake(prep, new_data=store3_item25)
+
+arima_model <- arima_reg(seasonal_period=365,
+                         non_seasonal_ar=5, # default max p to tune
+                         # non_seasona_ma=5, # default max q to tune
+                         seasonal_ar=2, # default max P to tune
+                         seasonal_ma=2, #default max Q to tune
+                         non_seasonal_differences=2, # default max d to tune
+                         seasonal_differences=2 #default max D to tune
+  ) %>%
+  set_engine("auto_arima")
+
+cv_split <- time_series_split(store3_item25, assess="3 months", cumulative = TRUE)
+
+cv_split %>%
+  tk_time_series_cv_plan() %>% #Put into a data frame
+  plot_time_series_cv_plan(date, sales, .interactive=FALSE)
+
+arima_wf <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(arima_model) %>%
+  fit(data=training(cv_split))
+
+cv_results <- modeltime_calibrate(arima_wf,
+                                  new_data = testing(cv_split))
+
+# Visualize CV results
+a1 <- cv_results %>%
+  modeltime_forecast(
+    new_data = testing(cv_split),
+    actual_data = store3_item25
+  ) %>%
+  plot_modeltime_forecast(.interactive=TRUE)
+
+# Evaluate the accuracy
+cv_results %>%
+  modeltime_accuracy() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE
+  )
+
+# Refit to all data then forecast
+es_fullfit <- cv_results %>%
+  modeltime_refit(data = store3_item25)
+
+es_preds <- es_fullfit %>%
+  modeltime_forecast(h = "3 months") %>%
+  rename(date=.index, sales=.value) %>%
+  select(date, sales) %>%
+  full_join(., y=test, by="date") %>%
+  select(id, sales)
+
+a2 <- es_fullfit %>%
+  modeltime_forecast(h = "3 months", actual_data = store3_item25) %>%
+  plot_modeltime_forecast(.interactive=FALSE)
+
+# part 2
+store3_item26 <- train %>%
+  filter(store==3, item==26)
+
+recipe2 <- recipe(sales~date, data=store3_item26) %>%
+  step_date(date, features="doy") %>%
+  step_date(date, features="dow") %>%
+  step_date(date, features="month")
+
+prep2 <- prep(recipe2)
+baked_train <- bake(prep2, new_data=store3_item26)
+
+cv_split2 <- time_series_split(store3_item26, assess="3 months", cumulative = TRUE)
+cv_split2 %>%
+  tk_time_series_cv_plan() %>% #Put into a data frame
+  plot_time_series_cv_plan(date, sales, .interactive=FALSE)
+
+## Cross-validate to tune model
+cv_results2 <- modeltime_calibrate(arima_wf,
+                                   new_data = testing(cv_split2))
+
+## Visualize CV results
+a3 <- cv_results2 %>%
+  modeltime_forecast(
+    new_data = testing(cv_split),
+    actual_data = store3_item26
+  ) %>%
+  plot_modeltime_forecast(.interactive=TRUE)
+
+## Evaluate the accuracy
+cv_results2 %>%
+  modeltime_accuracy() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE
+  )
+
+# Refit to all data then forecast
+es_fullfit2 <- cv_results2 %>%
+  modeltime_refit(data = store3_item26)
+
+es_preds2 <- es_fullfit2 %>%
+  modeltime_forecast(h = "3 months") %>%
+  rename(date=.index, sales=.value) %>%
+  select(date, sales) %>%
+  full_join(., y=test, by="date") %>%
+  select(id, sales)
+
+a4 <- es_fullfit2 %>%
+  modeltime_forecast(h = "3 months", actual_data = store3_item26) %>%
+  plot_modeltime_forecast(.interactive=FALSE)
+
+image <- plotly::subplot(a1, a3, a2, a4, nrows=2)
+
