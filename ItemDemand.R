@@ -385,6 +385,15 @@ b3 <- cv_results2 %>%
 es_fullfit2 <- cv_results2 %>%
   modeltime_refit(data = store3_item26_train)
 
+preds <- es_fullfit2 %>%
+  modeltime_forecast(h = "3 months") %>%
+  rename(date=.index, sales=.value) %>%
+  select(date, sales) %>% 
+  full_join(., y=test, by="date") %>%
+  select(id, sales)
+
+test
+
 b4 <- es_fullfit2 %>%
   modeltime_forecast(new_data = store3_item26_test, actual_data = store3_item26_train) %>%
   plot_modeltime_forecast(.interactive=FALSE)
